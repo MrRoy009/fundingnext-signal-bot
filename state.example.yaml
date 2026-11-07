@@ -1,0 +1,26 @@
+# Copy to state.yaml and keep it current from your competition account.
+# The bot reads this before every ticket. If updated_at is older than
+# risk.state_max_age_hours, every ticket is suppressed.
+# Tickets the bot issued after updated_at are counted on top of this file (open positions,
+# trades today, open risk) until you update it.
+updated_at: "2026-11-02T08:00:00Z"
+balance: 100000
+equity: 100000
+start_of_day_balance: 100000
+start_of_day_equity: 100000
+trades_today: 0
+trading_days_completed: 0
+open_positions: []
+# - symbol: US30         # index key (US30, NAS100, GER40) or the broker symbol
+#   side: BUY
+#   lots: 1.0
+#   entry: 42010.5
+#   stop: 41950.5
+#   risk_usd: 60.0       # loss if the stop is hit, from your platform
+pending_orders: []
+# - symbol: GER40        # resting limit or stop order not yet filled
+#   side: BUY
+#   lots: 2.0
+#   risk_usd: 120.0      # loss if it fills and the stop is hit (use the worst fill you allow)
+#   expires_utc: "2026-11-02T10:30:00Z"   # order expiry; risk counts until then
+# An open position or pending order on an index blocks every new ticket on that index.

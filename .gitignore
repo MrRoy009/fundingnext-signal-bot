@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+state.yaml
+data/store/
+logs/
+signals.csv
+.pytest_cache/
+signals*.csv
+regime/models/
+backtest/runs/*
+!backtest/runs/.gitkeep

@@ -1,0 +1,174 @@
+# Bot configuration. Values marked OWNER are defaults taken from the build prompt's
+# examples. Review every one, then set owner_confirmed: true. Until then the signal
+# engine suppresses every ticket.
+owner_confirmed: false
+
+# Stage gates. live_enabled may only become true after GATE 4 approval; it is the only switch
+# that lets the live loop read bars on or after holdout.start (COMMON ER-06).
+gates:
+  gate1_approved: "2026-11-02"
+  gate2_approved: "2026-11-02"   # owner approved docs/specs with default answers to O1-O11
+  live_enabled: false
+
+instruments:            # OWNER: your preferred indices
+  - key: US30
+    asset_class: index
+    tradeable: true
+    aliases: [US30, US30.cash, US30Cash, DJ30, DJI30, WS30, US30.c]
+  - key: NAS100
+    asset_class: index
+    tradeable: true
+    aliases: [NAS100, USTEC, NAS100.cash, US100, NDX100, US100.cash]
+  - key: US500          # downloaded for data only; not ranked or traded (GATE 2, O6)
+    asset_class: index
+    tradeable: false
+    aliases: [US500, SPX500, US500.cash, SP500, SPX500.cash]
+  - key: GER40
+    asset_class: index
+    tradeable: true
+    aliases: [GER40, DE40, GER40.cash, DAX40, GER40Cash]
+
+# Exchange per instrument: holiday calendar, local time zone and cash session (COMMON 1.6, 2).
+exchanges:
+  US30:   {calendar: NYSE,  tz: America/New_York, cash_open: "09:30", cash_close: "16:00"}
+  NAS100: {calendar: NYSE,  tz: America/New_York, cash_open: "09:30", cash_close: "16:00"}
+  US500:  {calendar: NYSE,  tz: America/New_York, cash_open: "09:30", cash_close: "16:00"}
+  GER40:  {calendar: XETRA, tz: Europe/Berlin,    cash_open: "09:00", cash_close: "17:30"}
+
+# Manual time exit, exchange-local wall clock on the signal's local date (COMMON 2, O3).
+time_exits:
+  US30:   "15:45"
+  NAS100: "15:45"
+  GER40:  "17:15"
+
+timeframes:
+  entry: M15            # OWNER
+  regime: H1            # OWNER
+
+history_years: 5        # OWNER
+
+# How the broker's server clock relates to UTC: an IANA zone plus a fixed shift.
+# MetaQuotes-Demo runs on Athens time (UTC+2, UTC+3 in EU summer), confirmed from the
+# US cash open in the history. Many other brokers use "New York close" time:
+# {zone: America/New_York, shift_hours: 7}. data.download checks this rule against the
+# history and stops on a mismatch; the bot also checks it against the live tick.
+server_timezone:
+  zone: Europe/Athens
+  shift_hours: 0
+
+holdout:
+  start: "2026-05-01"   # OWNER: bars from this date on are locked until final approval
+
+data_dir: data/store
+staleness_multiple: 2   # last closed bar older than this many timeframes => NO SIGNAL
+
+# Known data defects (COMMON 1.3-1.5). Frozen.
+data_quality:
+  segment_break_days: 7
+  tick_volume_bad:
+    - {start: "2024-10-04T00:00:00Z", end: "2025-01-08T00:00:00Z", reason: "flat ~8,900 per bar, spikes of 100k+, GER40 = 15"}
+  known_holes:
+    - {start: "2025-07-16T07:30:00Z", end: "2025-09-09T11:30:00Z", instruments: [US30, NAS100, US500], reason: "no bars from demo broker"}
+    - {start: "2025-07-16T07:30:00Z", end: "2025-09-09T11:30:00Z", instruments: [GER40], reason: "no bars from demo broker except about 2 flat stray bars per evening until 2025-07-22 (spec amendment A1)"}
+  # Bars dropped by BarStore.load before any feature, regime or backtest use (spec amendment A1,
+  # COMMON 1.3). The drop leaves a gap over segment_break_days, so every lookback restarts after it.
+  excluded_windows:
+    - {start: "2024-10-04T00:00:00Z", end: "2025-01-08T00:00:00Z", instruments: [US30, NAS100, US500, GER40], reason: "prices frozen (52-83% of in-session M15 bars with range <= 0.5 pt, whole flat sessions) and tick volume corrupt"}
+    - {start: "2025-07-16T07:30:00Z", end: "2025-09-09T11:30:00Z", instruments: [GER40], reason: "stray flat bars inside the 2025 data hole"}
+
+# Feature constants (COMMON 3, 4, 11). Frozen: any change is a new trial.
+features:
+  atr_period: 14
+  tod_lookback_dates: 20
+  tod_min_obs: 10
+  rs4h_lookback_bars: 16
+  rsday_lookback_bars: 24
+  datr_dates: 14
+  datr_min_coverage: 0.9
+  expected_session_bars: {US30: 26, NAS100: 26, GER40: 34}
+
+# Regime model constants (COMMON 6, 11). Frozen.
+regime:
+  k_set: [2, 3, 4]
+  covariance_type: full
+  n_iter: 500
+  tol: 1.0e-4
+  min_covar: 1.0e-3
+  seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  stability_seeds: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+  winsor_pct: [0.5, 99.5]
+  train_days: 365
+  refit: first_saturday_12utc
+  sequence_break_days: 7
+  min_train_rows: 1000
+  min_state_occupancy: 0.02
+  max_condition_number: 1.0e6
+  stale_days: 5
+  max_model_age_days: 62
+  gate_threshold: 0.0
+  direction_z: 2.0
+  daily_cycle_bars: {US30: 23, NAS100: 23, GER40: 22}
+  core_hours_local: {US30: [9, 15], NAS100: [9, 15], GER40: [9, 16]}   # first and last H1 open hour
+
+# Order protocols (COMMON 7, O1). Frozen.
+protocols:
+  chase_frac: 0.20
+  skip_frac: 0.50
+
+# Cost model for backtests (COMMON 8). spread_floor is computed once from pre-holdout data:
+# {instrument: {utc_hour: points}}, p90 of positive M15 bar spreads, 2023-01-01..2026-04-30.
+# Amendment A1: an hour with fewer than 100 positive-spread bars takes the larger floor of its
+# two neighbouring hours (only GER40 hour 21, 5 bars: 0.5 -> max(1.2, 6.0) = 6.0).
+costs:
+  spread_floor:
+    US30: {0: 1.5, 1: 1.5, 2: 1.5, 3: 1.5, 4: 1.5, 5: 1.5, 6: 1.5, 7: 1.4, 8: 1.2, 9: 1.2, 10: 1.2, 11: 1.2, 12: 1.2, 13: 1.2, 14: 1.2, 15: 1.2, 16: 1.2, 17: 1.2, 18: 1.0, 19: 1.0, 20: 1.2, 21: 1.4, 22: 1.5, 23: 1.5}
+    NAS100: {0: 2.0, 1: 2.0, 2: 2.0, 3: 2.0, 4: 2.0, 5: 2.0, 6: 2.0, 7: 2.0, 8: 2.0, 9: 2.0, 10: 2.0, 11: 2.0, 12: 2.0, 13: 2.0, 14: 1.2, 15: 1.0, 16: 1.0, 17: 1.0, 18: 1.0, 19: 1.0, 20: 2.0, 21: 2.0, 22: 2.0, 23: 2.0}
+    US500: {0: 0.5, 1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5, 5: 0.5, 6: 0.5, 7: 0.5, 8: 0.5, 9: 0.5, 10: 0.5, 11: 0.5, 12: 0.5, 13: 0.5, 14: 0.5, 15: 0.4, 16: 0.4, 17: 0.4, 18: 0.4, 19: 0.4, 20: 0.5, 21: 0.5, 22: 0.5, 23: 0.5}
+    GER40: {0: 6.0, 1: 4.0, 2: 4.0, 3: 4.0, 4: 4.0, 5: 4.0, 6: 4.0, 7: 0.5, 8: 0.5, 9: 0.5, 10: 0.5, 11: 0.5, 12: 0.5, 13: 0.5, 14: 0.5, 15: 1.2, 16: 1.2, 17: 1.2, 18: 1.2, 19: 1.2, 20: 1.2, 21: 6.0, 22: 6.0, 23: 6.0}
+  slippage_floor_frac: 0.5
+  slippage_atr_frac: 0.02
+  commission_stress_per_lot_side: {US30: 1.0, NAS100: 1.0, GER40: 1.12}
+  usd_per_point_demo: {US30: 1.0, NAS100: 1.0, GER40: 1.12}
+  margin_ccy_usd: {US30: 1.0, NAS100: 1.0, GER40: 1.12}   # amendment A4: swap mode 3 -> USD
+
+risk:
+  risk_per_trade_pct: 0.5        # OWNER
+  personal_daily_stop_pct: 3     # OWNER, measured from start-of-day balance
+  cost_buffer_pct_of_risk: 10    # adds spread/commission headroom to every risk check
+  state_max_age_hours: 12
+
+execution:
+  delay_bars: [1, 3]             # OWNER: manual entry delay used in cost stress tests
+  skip_if_atr_mult: 0.25         # fallback rule only (COMMON 7); strategies use protocols
+  valid_for_bars: 3              # GATE 2, O2: 45 minutes covers the maximum manual delay
+
+rules:                            # competition rule set (verify against official rules)
+  initial_balance: 100000
+  daily_loss_pct: 5
+  daily_loss_base: initial_balance       # OWNER: initial_balance | start_of_day_balance | start_of_day_equity
+  daily_loss_reference: start_of_day_balance   # OWNER: start_of_day_balance | start_of_day_equity
+  day_boundary: server_midnight          # GATE 2, O8: 00:00 Europe/Athens
+  max_loss_pct: 10
+  max_open_positions: 5
+  max_lots:
+    index: 3
+    forex: 5
+  max_trades_per_day: 50
+  min_trading_days: 5
+  competition_end_utc: null              # OWNER: e.g. "2026-11-30T21:00:00Z"
+  close_before_end_minutes: 15
+  no_new_trades_before_end_minutes: 60
+  # OWNER (O4): competition contract and costs. null = not confirmed yet; backtests then report
+  # the demo contract only and live tickets stay suppressed.
+  competition_usd_per_point: null        # e.g. {US30: 1.0, NAS100: 1.0, GER40: 1.12}
+  commission_per_lot_side: 0             # competition commission in USD (0 until confirmed)
+  pending_orders_allowed: null           # SES-IBX-01 needs stop orders with expiry
+  # OWNER (O5): holding and news rules.
+  overnight_holding_allowed: null
+  weekend_holding_allowed: null
+  restricted_windows_utc: []             # e.g. [{start: "2026-11-06T13:15:00Z", end: "2026-11-06T13:45:00Z", reason: "NFP"}]
+
+sessions_utc:                     # OWNER: hours when new tickets are allowed (UTC), checked on T
+  US30: [["13:30", "20:00"]]
+  NAS100: [["13:30", "20:00"]]
+  GER40: [["07:00", "15:30"]]
